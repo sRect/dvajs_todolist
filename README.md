@@ -1,70 +1,171 @@
-# Getting Started with Create React App
+## dvajs
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+### 1. 项目结构
+```
+├── node_modules
+├── package.json
+├── public
+|  ├── favicon.ico
+|  ├── index.html
+|  ├── logo192.png
+|  ├── logo512.png
+|  ├── manifest.json
+|  └── robots.txt
+├── README.md
+├── src
+|  ├── components
+|  |  ├── Addtodo.js
+|  |  └── TodoListItem.js
+|  ├── index.js
+|  ├── models
+|  |  ├── count.js
+|  |  └── todos.js
+|  ├── router.js
+|  └── routes
+|     ├── Count.js
+|     └── Todos.js
+└── yarn.lock
+```
 
-## Available Scripts
+### 2. 入口`index.js`
+```javascript
+import dva from "dva";
+import router from "./router";
 
-In the project directory, you can run:
+const allModel = require.context('./models', true, /\.js$/);
 
-### `yarn start`
+// 1.init
+const app = dva();
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+// 2.定义Model
+// app.model(require("./models/todos").default);
+allModel.keys().forEach((key) => {
+  // console.log("allModel(key).default", allModel(key).default);
+  app.model(allModel(key).default);
+});
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+// 3.Router
+app.router(router);
+// 4.Start
+app.start("#root");
+```
 
-### `yarn test`
+### 3. 路由`router.js`
+```javascript
+import { Route, Router, Switch, Link } from "dva/router";
+import Todos from "./routes/Todos";
+import Count from './routes/Count';
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+function RouterConfig({ history }) {
+  return (
+    <Router history={history}>
+      <>
+        <Link to="/">home</Link> | <Link to="/count">count</Link>
+        <Switch>
+          <Route path="/" exact component={Todos} />
+          <Route path="/count" exact component={Count} />
+        </Switch>
+      </>
+    </Router>
+  );
+}
 
-### `yarn build`
+export default RouterConfig;
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### 4. `models > count`模型
+```javascript
+const delay = (time) => {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(), time);
+  });
+};
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+const countStore = {
+  namespace: "count",
+  state: {
+    count: 1,
+  },
+  reducers: {
+    add(state, { payload }) {
+      return { count: state.count + (payload?.num || 1) };
+    },
+    minus(state) {
+      return { count: state.count - 1 };
+    },
+  },
+  effects: {
+    // 异步添加
+    *asyncAdd({ payload }, effect) {
+      const { call, put } = effect;
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+      yield call(delay, 1000);
+      yield put({ type: "add", payload });
+    },
+  },
+  // 订阅
+  subscriptions: {
+    setup(props) {
+      const { history, dispatch } = props;
+      return history.listen(({ pathname }) => {
+        if (pathname === "/count") {
+          alert("subscriptions");
+          dispatch({
+            type: "asyncAdd",
+            payload: {
+              num: 1,
+            },
+          });
+        }
+      });
+    },
+  },
+};
 
-### `yarn eject`
+export default countStore;
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+### 5. `routes > Count`页面
+```javascript
+import React from "react";
+import { connect } from "dva";
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+const Count = (props) => {
+  const { count, add, minus, asyncAdd } = props;
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+  return (
+    <div>
+      count: {count} <br />
+      <button onClick={add}>add</button>
+      <button onClick={minus}>minus</button>
+      <button onClick={() => asyncAdd(10)}>asyncAdd +10</button>
+    </div>
+  );
+};
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+const mapStateToProps = (state) => state.count;
 
-## Learn More
+const mapDispatchToProps = (dispatch) => ({
+  add() {
+    dispatch({
+      type: "count/add",
+    });
+  },
+  minus() {
+    dispatch({
+      type: "count/minus",
+    });
+  },
+  asyncAdd(num) {
+    dispatch({
+      type: "count/asyncAdd",
+      payload: {
+        num,
+      },
+    });
+  },
+});
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+export default connect(mapStateToProps, mapDispatchToProps)(Count);
 
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `yarn build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+```
